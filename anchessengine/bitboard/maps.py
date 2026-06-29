@@ -6,7 +6,7 @@ that map square indices to precomputed attack bitboards for all piece types.
 This allows for O(1) attack pattern lookup during gameplay.
 """
 
-from wake.constants import Square
+from anchessengine.constants import Square
 from .core import BOARD_SQUARES
 from .attacks import (
     generate_knight_attack_bb_from_square,

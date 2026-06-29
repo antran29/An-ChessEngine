@@ -1,5 +1,5 @@
 """
-Core bitboard operations for the Wake chess engine.
+Core bitboard operations for the An Chess Engine.
 
 This module provides fundamental bitboard operations including:
 - Basic bitboard creation and manipulation

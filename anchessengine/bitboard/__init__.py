@@ -1,5 +1,5 @@
 """
-Bitboard package for the Wake chess engine.
+Bitboard package for the An Chess Engine.
 
 This package provides a comprehensive set of bitboard operations for chess
 programming, including core operations, ray generation, attack patterns,

@@ -4,10 +4,10 @@ import sys
 import time
 from os import system, name
 
-from wake.bitboard_helpers import pprint_pieces
-from wake.constants import Color, UciCommand
-from wake.position import Position
-from wake.uci_input_parser import UciInputParser
+from anchessengine.bitboard_helpers import pprint_pieces
+from anchessengine.constants import Color, UciCommand
+from anchessengine.position import Position
+from anchessengine.uci_input_parser import UciInputParser
 
 CURRENT_VERSION = "0.1.0"
 
@@ -61,7 +61,7 @@ class Game:
         while True:
             if not sentinel:
                 print(
-                    f"Wake Engine [{CURRENT_VERSION}] running using interface mode: [{self.mode}]"
+                    f"An Chess Engine [{CURRENT_VERSION}] running using interface mode: [{self.mode}]"
                 )
                 print(f"{self.color_to_move[self.position.color_to_move]} to move:")
                 sentinel = True

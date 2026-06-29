@@ -1,7 +1,7 @@
 import re
 
-from wake.constants import Piece, algebraic_square_map
-from wake.move import Move
+from anchessengine.constants import Piece, algebraic_square_map
+from anchessengine.move import Move
 
 
 def make_invalid_uci_command():

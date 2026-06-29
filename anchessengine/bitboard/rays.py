@@ -7,7 +7,7 @@ for sliding pieces (rooks, bishops, queens) on an otherwise empty board.
 
 import numpy as np
 
-from wake.constants import File, HOT
+from anchessengine.constants import File, HOT
 from .core import clear_bit
 
 

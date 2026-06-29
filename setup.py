@@ -5,7 +5,7 @@ with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
 setup(
-    name="wakechess",
+    name="anchessengine",
     packages=find_packages(),
     version="0.0.1",
     license="Apache",

@@ -7,8 +7,8 @@ and special regions like center squares, flanks, and castling sides.
 
 import numpy as np
 
-from wake.bitboard.core import get_squares_from_bitboard
-from wake.bitboard.regions import (
+from anchessengine.bitboard.core import get_squares_from_bitboard
+from anchessengine.bitboard.regions import (
     rank_8_bb,
     rank_7_bb,
     rank_6_bb,
@@ -33,7 +33,7 @@ from wake.bitboard.regions import (
     kingside_bb,
     queenside_bb,
 )
-from wake.constants import Square
+from anchessengine.constants import Square
 
 
 class TestRankRegions:

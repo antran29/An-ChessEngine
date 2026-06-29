@@ -7,7 +7,7 @@ including knights, rooks, bishops, queens, kings, and pawns.
 
 import numpy as np
 
-from wake.bitboard.attacks import (
+from anchessengine.bitboard.attacks import (
     generate_knight_attack_bb_from_square,
     generate_rank_attack_bb_from_square,
     generate_file_attack_bb_from_square,
@@ -20,7 +20,7 @@ from wake.bitboard.attacks import (
     generate_white_pawn_motion_bb_from_square,
     generate_black_pawn_motion_bb_from_square,
 )
-from wake.bitboard.core import get_squares_from_bitboard
+from anchessengine.bitboard.core import get_squares_from_bitboard
 
 
 class TestKnightAttacks:

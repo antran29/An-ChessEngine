@@ -7,8 +7,8 @@ ensuring proper dictionary structure and attack pattern correctness.
 
 import numpy as np
 
-from wake.bitboard.core import get_squares_from_bitboard, BOARD_SQUARES
-from wake.bitboard.maps import (
+from anchessengine.bitboard.core import get_squares_from_bitboard, BOARD_SQUARES
+from anchessengine.bitboard.maps import (
     make_knight_attack_bbs,
     make_rank_attack_bbs,
     make_file_attack_bbs,

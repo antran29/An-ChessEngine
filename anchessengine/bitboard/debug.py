@@ -8,7 +8,7 @@ states, including pretty-printing bitboards and piece positions.
 import string
 import numpy as np
 
-from wake.constants import piece_to_glyph
+from anchessengine.constants import piece_to_glyph
 from .core import get_binary_string
 
 

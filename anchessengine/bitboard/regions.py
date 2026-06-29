@@ -8,7 +8,7 @@ flanks, and castling sides.
 
 import numpy as np
 
-from wake.constants import Rank, File, DARK_SQUARES, LIGHT_SQUARES
+from anchessengine.constants import Rank, File, DARK_SQUARES, LIGHT_SQUARES
 
 
 # -------------------------------------------------------------

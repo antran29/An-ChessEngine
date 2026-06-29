@@ -2,7 +2,7 @@ import string
 
 import numpy as np
 
-from wake.constants import (
+from anchessengine.constants import (
     File,
     HOT,
     Square,

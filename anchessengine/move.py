@@ -1,4 +1,4 @@
-from wake.constants import Piece
+from anchessengine.constants import Piece
 
 
 class Move:

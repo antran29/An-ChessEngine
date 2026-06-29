@@ -7,8 +7,8 @@ north, south, east, west, and diagonal rays.
 
 import numpy as np
 
-from wake.bitboard.core import make_uint64, get_squares_from_bitboard
-from wake.bitboard.rays import (
+from anchessengine.bitboard.core import make_uint64, get_squares_from_bitboard
+from anchessengine.bitboard.rays import (
     get_south_ray,
     get_north_ray,
     get_west_ray,

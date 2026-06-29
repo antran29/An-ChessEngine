@@ -1,16 +1,12 @@
-# Wake
+# An Chess Engine
 
-<img src="./wake.png" width="220px"></img>
+<img src="./AChess.png" width="220px"></img>
 
-## Livesteam
-
-Significant portions of this project have been built on livestream to document the learning process.
-
-The livestream series is in progress on YouTube, and it starts here: https://www.youtube.com/watch?v=1QotIA4_jb4
+An Chess Engine is a modified educational chess engine created for my HSC Software Engineering major project. It uses a Python bitboard-based chess engine as a foundation and has been adapted with new branding, documentation, testing evidence and planned feature improvements.
 
 ## Using the Engine
 
-The current version of Wake is run using Python 3.x from the terminal.
+The current version of AnChessEngine is run using Python 3.x from the terminal.
 
 - Clone the directory
 
@@ -23,7 +19,7 @@ The current version of Wake is run using Python 3.x from the terminal.
 You will be presented with an output of the board in the shell:
 
 ```
-Wake Engine [0.1.0] running using interface mode: [uci]
+An Chess Engine [0.1.0] running using interface mode: [uci]
 White to move:
 8  ♜ ♞ ♝ ♛ ♚ ♝ ♞ ♜
 7  ♟︎ ♟︎ ♟︎ ♟︎ ♟︎ ♟︎ ♟︎ ♟︎
@@ -61,9 +57,11 @@ The only valid inputs are currently:
 - Any valid move (e.g. `g1f3` for a normal move, `a7a8q` for promotion)
 - `quit` to kill the engine and terminal input processes.
 
-## Contributing
+## Source Acknowledgement
 
-The engine code will be open for general contribution from the after v1 is complete.
+This project is based on the open-source Wake chess engine by Wes Doyle. The original project was used as a foundation for learning and development.
+
+For my HSC Software Engineering major project, I have rebranded the project as An Chess Engine and will modify the project through documentation, testing, interface improvements, feature development and project presentation evidence.
 
 ## Roadmap / TODO
 

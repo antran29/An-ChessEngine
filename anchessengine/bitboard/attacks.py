@@ -8,7 +8,7 @@ and non-sliding pieces (king, knight, pawn).
 
 import numpy as np
 
-from wake.constants import File, HOT, Rank
+from anchessengine.constants import File, HOT, Rank
 from .core import make_uint64, clear_bit, set_bit
 from .rays import (
     get_north_ray,

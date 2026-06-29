@@ -2,7 +2,7 @@ import copy
 
 import numpy as np
 
-from wake.bitboard_helpers import (
+from anchessengine.bitboard_helpers import (
     set_bit,
     get_northwest_ray,
     bitscan_forward,
@@ -19,8 +19,8 @@ from wake.bitboard_helpers import (
     get_squares_from_bitboard,
     pprint_bb,
 )
-from wake.board import Board
-from wake.constants import (
+from anchessengine.board import Board
+from anchessengine.constants import (
     Color,
     Piece,
     Square,
@@ -31,8 +31,8 @@ from wake.constants import (
     black_promotion_map,
     piece_to_value,
 )
-from wake.fen import generate_fen
-from wake.move import Move, MoveResult
+from anchessengine.fen import generate_fen
+from anchessengine.move import Move, MoveResult
 
 
 # De-dupe from board module

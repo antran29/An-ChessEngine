@@ -1,6 +1,6 @@
 import numpy as np
 
-from wake.bitboard_helpers import (
+from anchessengine.bitboard_helpers import (
     make_uint64,
     set_bit,
     make_knight_attack_bbs,
@@ -13,7 +13,7 @@ from wake.bitboard_helpers import (
     make_black_pawn_motion_bbs,
     make_queen_attack_bbs,
 )
-from wake.constants import Piece, Color, File
+from anchessengine.constants import Piece, Color, File
 
 
 class Board:

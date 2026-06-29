@@ -8,7 +8,7 @@ and querying functions.
 import numpy as np
 import pytest
 
-from wake.bitboard.core import (
+from anchessengine.bitboard.core import (
     BOARD_SIZE,
     BOARD_SQUARES,
     make_uint64,

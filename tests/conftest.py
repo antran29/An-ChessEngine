@@ -4,7 +4,7 @@ Common pytest fixtures and configuration for bitboard tests.
 
 import pytest
 
-from wake.bitboard import make_uint64, set_bit
+from anchessengine.bitboard import make_uint64, set_bit
 
 
 @pytest.fixture

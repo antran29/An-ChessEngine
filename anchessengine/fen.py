@@ -1,6 +1,6 @@
 import numpy as np
 
-from wake.constants import Color, square_map
+from anchessengine.constants import Color, square_map
 
 
 def generate_fen(position) -> str:
