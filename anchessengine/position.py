@@ -698,58 +698,63 @@ class Position:
     # -------------------------------------------------------------
 
     def is_legal_pawn_move(self, move: Move) -> bool:
-        """
-        Returns True iff the given pawn move is legal - i.e.
-        - the to square intersects with pawn "motion" (forward) bitboard
-        - the to square is an attack and intersects with opponent piece or en passant target bitboard
-        """
+        """Return True if the pawn move is legal from its exact square."""
         current_square_bb = set_bit(make_uint64(), move.from_sq)
         moving_to_square_bb = set_bit(make_uint64(), move.to_sq)
-        en_passant_target = make_uint64()
-
-        if self.en_passant_target:
-            en_passant_target = set_bit(make_uint64(), self.en_passant_target)
 
         if move.piece == Piece.wP:
             if not (self.board.white_P_bb & current_square_bb):
                 return False
 
-            if self.is_not_pawn_motion_or_attack(move):
-                return False
+            # One-square forward move.
+            if move.to_sq == move.from_sq + 8:
+                return not (moving_to_square_bb & self.board.occupied_squares_bb)
 
-            # If it's a pawn motion forward, check that it isn't blocked
-            if move.from_sq == move.to_sq - 8 and (
-                moving_to_square_bb & self.board.occupied_squares_bb
-            ):
-                return False
+            # Two-square forward move from the starting rank.
+            if move.from_sq in Rank.x2 and move.to_sq == move.from_sq + 16:
+                intermediate_square_bb = set_bit(make_uint64(), move.from_sq + 8)
+                blocked = (
+                    intermediate_square_bb | moving_to_square_bb
+                ) & self.board.occupied_squares_bb
+                return not blocked
 
-            # If it's a pawn attack move, check that it intersects with black pieces or ep target
-            if move.from_sq == move.to_sq - 9 or move.from_sq == move.to_sq - 7:
-                if (self.white_pawn_attacks & moving_to_square_bb) & ~(
-                    self.board.black_pieces_bb | en_passant_target
-                ):
-                    return False
-            return True
+            # Diagonal captures, including en passant.
+            if self.board.white_pawn_attack_bbs.get(move.from_sq, make_uint64()) & moving_to_square_bb:
+                en_passant_target = make_uint64()
+                if self.en_passant_target is not None:
+                    en_passant_target = set_bit(make_uint64(), self.en_passant_target)
+
+                return bool(moving_to_square_bb & (self.board.black_pieces_bb | en_passant_target))
+
+            return False
 
         if move.piece == Piece.bP:
             if not (self.board.black_P_bb & current_square_bb):
                 return False
-            if self.is_not_pawn_motion_or_attack(move):
-                return False
 
-            # If it's a pawn motion forward, check that it isn't blocked
-            if move.from_sq == move.to_sq + 8 and (
-                moving_to_square_bb & self.board.occupied_squares_bb
-            ):
-                return False
+            # One-square forward move.
+            if move.to_sq == move.from_sq - 8:
+                return not (moving_to_square_bb & self.board.occupied_squares_bb)
 
-            # If it's a pawn attack move, check that it intersects with white pieces or ep target
-            if move.from_sq == move.to_sq + 9 or move.from_sq == move.to_sq + 7:
-                if (self.black_pawn_attacks & moving_to_square_bb) & ~(
-                    self.board.white_pieces_bb | en_passant_target
-                ):
-                    return False
-            return True
+            # Two-square forward move from the starting rank.
+            if move.from_sq in Rank.x7 and move.to_sq == move.from_sq - 16:
+                intermediate_square_bb = set_bit(make_uint64(), move.from_sq - 8)
+                blocked = (
+                    intermediate_square_bb | moving_to_square_bb
+                ) & self.board.occupied_squares_bb
+                return not blocked
+
+            # Diagonal captures, including en passant.
+            if self.board.black_pawn_attack_bbs.get(move.from_sq, make_uint64()) & moving_to_square_bb:
+                en_passant_target = make_uint64()
+                if self.en_passant_target is not None:
+                    en_passant_target = set_bit(make_uint64(), self.en_passant_target)
+
+                return bool(moving_to_square_bb & (self.board.white_pieces_bb | en_passant_target))
+
+            return False
+
+        return False
 
     def is_legal_bishop_move(self, move: Move) -> bool:
         """
@@ -835,71 +840,86 @@ class Position:
     # -------------------------------------------------------------
 
     def is_not_pawn_motion_or_attack(self, move):
+        """Return True when the pawn target is not legal from its exact square."""
         to_sq_bb = set_bit(make_uint64(), move.to_sq)
+
         if move.color == Color.WHITE:
-            if (
-                not (
-                    self.board.white_pawn_motion_bbs[move.from_sq]
-                    | self.board.white_pawn_attack_bbs[move.from_sq]
-                )
-                & to_sq_bb
-            ):
-                return True
-        if move.color == Color.BLACK:
-            if (
-                not (
-                    self.board.black_pawn_motion_bbs[move.from_sq]
-                    | self.board.black_pawn_attack_bbs[move.from_sq]
-                )
-                & to_sq_bb
-            ):
-                return True
+            motion = self.board.white_pawn_motion_bbs.get(move.from_sq, make_uint64())
+            attacks = self.board.white_pawn_attack_bbs.get(move.from_sq, make_uint64())
+        else:
+            motion = self.board.black_pawn_motion_bbs.get(move.from_sq, make_uint64())
+            attacks = self.board.black_pawn_attack_bbs.get(move.from_sq, make_uint64())
+
+        legal_targets = motion | attacks
+
+        if not (legal_targets & to_sq_bb):
+            return True
+
+        return False
 
     def is_not_bishop_attack(self, move):
+        """Return True when the bishop target is not legal from its exact square."""
         moving_to_square_bb = set_bit(make_uint64(), move.to_sq)
-        if move.color == Color.WHITE:
-            if not (self.white_bishop_attacks & moving_to_square_bb):
-                return True
-        if move.color == Color.BLACK:
-            if not (self.black_bishop_attacks & moving_to_square_bb):
-                return True
+        legal_bishop_moves = self.update_legal_bishop_moves(move.from_sq, move.color)
+
+        if not (legal_bishop_moves & moving_to_square_bb):
+            return True
+
+        return False
 
     def is_not_knight_attack(self, move):
+        """Return True when the knight target is not legal from its exact square."""
         moving_to_square_bb = set_bit(make_uint64(), move.to_sq)
+        legal_knight_moves = self.board.get_knight_attack_from(move.from_sq)
+
         if move.color == Color.WHITE:
-            if not (self.white_knight_attacks & moving_to_square_bb):
-                return True
-        if move.color == Color.BLACK:
-            if not (self.black_knight_attacks & moving_to_square_bb):
-                return True
+            legal_knight_moves &= ~self.board.white_pieces_bb
+        else:
+            legal_knight_moves &= ~self.board.black_pieces_bb
+
+        if not (legal_knight_moves & moving_to_square_bb):
+            return True
+
+        return False
 
     def is_not_king_attack(self, move):
+        """Return True when the king target is not legal from its exact square."""
         moving_to_square_bb = set_bit(make_uint64(), move.to_sq)
+        legal_king_moves = generate_king_attack_bb_from_square(move.from_sq)
+
         if move.color == Color.WHITE:
-            if not (self.white_king_attacks & moving_to_square_bb):
-                return True
-        if move.color == Color.BLACK:
-            if not (self.black_king_attacks & moving_to_square_bb):
-                return True
+            legal_king_moves &= ~self.board.white_pieces_bb
+        else:
+            legal_king_moves &= ~self.board.black_pieces_bb
+
+        if self.is_castling(move):
+            legal_king_moves |= self.add_castling_moves(
+                make_uint64(), self.can_castle(move.color), move.color
+            )
+
+        if not (legal_king_moves & moving_to_square_bb):
+            return True
+
         return False
 
     def is_not_queen_attack(self, move):
+        """Return True when the queen target is not legal from its exact square."""
         moving_to_square_bb = set_bit(make_uint64(), move.to_sq)
-        if move.color == Color.WHITE:
-            if not (self.white_queen_attacks & moving_to_square_bb):
-                return True
-        if move.color == Color.BLACK:
-            if not (self.black_queen_attacks & moving_to_square_bb):
-                return True
+        legal_queen_moves = self.update_legal_queen_moves(move.from_sq, move.color)
+
+        if not (legal_queen_moves & moving_to_square_bb):
+            return True
+
+        return False
 
     def is_not_rook_attack(self, move):
+        """Return True when the rook target is not legal from its exact square."""
         moving_to_square_bb = set_bit(make_uint64(), move.to_sq)
-        if move.color == Color.WHITE:
-            if not (self.white_rook_attacks & moving_to_square_bb):
-                return True
-        if move.color == Color.BLACK:
-            if not (self.black_rook_attacks & moving_to_square_bb):
-                return True
+        legal_rook_moves = self.update_legal_rook_moves(move.from_sq, move.color)
+
+        if not (legal_rook_moves & moving_to_square_bb):
+            return True
+
         return False
 
     @staticmethod
@@ -1071,6 +1091,8 @@ class Position:
         if color_to_move == Color.BLACK:
             self.black_rook_attacks |= legal_moves
 
+        return legal_moves
+
     # -------------------------------------------------------------
     # LEGAL PAWN MOVES
     # -------------------------------------------------------------
@@ -1227,6 +1249,8 @@ class Position:
 
         if color_to_move == Color.BLACK:
             self.black_queen_attacks |= legal_moves
+
+        return legal_moves
 
     # -------------------------------------------------------------
     # LEGAL KING MOVES
