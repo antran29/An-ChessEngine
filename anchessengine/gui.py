@@ -27,6 +27,10 @@ LEGAL_MOVE_DOT = (30, 120, 70)
 CAPTURE_MOVE_FILL = (220, 70, 70, 120)
 CAPTURE_BORDER = (150, 20, 20)
 
+CASTLE_FILL = (245, 190, 65, 105)
+CASTLE_BORDER = (170, 110, 20)
+CASTLE_DOT = (190, 130, 25)
+
 MENU_BG = (18, 28, 23)
 MENU_LEFT = (30, 44, 37)
 MENU_RIGHT = (38, 55, 45)
@@ -353,6 +357,223 @@ def sync_engine_state(position):
         pass
 
 
+
+# ---------------------------------------------------------------------
+# Castling helpers
+# ---------------------------------------------------------------------
+
+CASTLING_ROUTES = {
+    Color.WHITE: {
+        "kingside": {
+            "king_from": 4,
+            "king_to": 6,
+            "rook_from": 7,
+            "rook_to": 5,
+            "empty": [5, 6],
+            "safe": [4, 5, 6],
+        },
+        "queenside": {
+            "king_from": 4,
+            "king_to": 2,
+            "rook_from": 0,
+            "rook_to": 3,
+            "empty": [1, 2, 3],
+            "safe": [4, 3, 2],
+        },
+    },
+    Color.BLACK: {
+        "kingside": {
+            "king_from": 60,
+            "king_to": 62,
+            "rook_from": 63,
+            "rook_to": 61,
+            "empty": [61, 62],
+            "safe": [60, 61, 62],
+        },
+        "queenside": {
+            "king_from": 60,
+            "king_to": 58,
+            "rook_from": 56,
+            "rook_to": 59,
+            "empty": [57, 58, 59],
+            "safe": [60, 59, 58],
+        },
+    },
+}
+
+
+def get_castle_side_from_rook_square(color, rook_square):
+    """Return the castling side controlled by a rook square."""
+    if color == Color.WHITE:
+        if rook_square == 7:
+            return "kingside"
+        if rook_square == 0:
+            return "queenside"
+
+    if color == Color.BLACK:
+        if rook_square == 63:
+            return "kingside"
+        if rook_square == 56:
+            return "queenside"
+
+    return None
+
+
+def get_castle_side_from_king_target(color, target_square):
+    """Return the castling side represented by a king target square."""
+    for side, route in CASTLING_ROUTES[color].items():
+        if target_square == route["king_to"]:
+            return side
+
+    return None
+
+
+def can_castle_side(position, color, side):
+    """Return True when a side can legally castle on the requested side."""
+    route = CASTLING_ROUTES[color][side]
+    side_index = 0 if side == "kingside" else 1
+    enemy_color = opposite_color(color)
+
+    if not position.castle_rights[color][side_index]:
+        return False
+
+    king_piece = Piece.wK if color == Color.WHITE else Piece.bK
+    rook_piece = Piece.wR if color == Color.WHITE else Piece.bR
+
+    if get_piece_on_square(position, route["king_from"]) != king_piece:
+        return False
+
+    if get_piece_on_square(position, route["rook_from"]) != rook_piece:
+        return False
+
+    for square in route["empty"]:
+        if get_piece_on_square(position, square) is not None:
+            return False
+
+    # The king cannot castle out of, through, or into check.
+    for square in route["safe"]:
+        if is_square_attacked(position.piece_map, square, enemy_color):
+            return False
+
+    return True
+
+
+def get_available_castles(position, selected_square):
+    """Return legal castle routes for a selected king or rook."""
+    piece = get_piece_on_square(position, selected_square)
+
+    if not is_current_turn_piece(position, piece):
+        return []
+
+    color = position.color_to_move
+    available = []
+
+    if piece in (Piece.wK, Piece.bK):
+        for side in ("kingside", "queenside"):
+            route = CASTLING_ROUTES[color][side]
+            if selected_square == route["king_from"] and can_castle_side(position, color, side):
+                available.append((side, route))
+
+    elif piece in (Piece.wR, Piece.bR):
+        side = get_castle_side_from_rook_square(color, selected_square)
+        if side and can_castle_side(position, color, side):
+            available.append((side, CASTLING_ROUTES[color][side]))
+
+    return available
+
+
+def calculate_castle_targets(position, selected_square):
+    """Return castling destination squares when the king is selected."""
+    piece = get_piece_on_square(position, selected_square)
+
+    if piece not in (Piece.wK, Piece.bK):
+        return []
+
+    return [route["king_to"] for _, route in get_available_castles(position, selected_square)]
+
+
+def calculate_castle_highlights(position, selected_square):
+    """Highlight the king and rook involved when castling is available."""
+    highlight_squares = []
+
+    for _, route in get_available_castles(position, selected_square):
+        for square in (route["king_from"], route["rook_from"]):
+            if square not in highlight_squares:
+                highlight_squares.append(square)
+
+    return highlight_squares
+
+
+def get_castling_route_for_selection(position, from_square, target_square):
+    """Return the castling side and route for a king castling attempt."""
+    piece = get_piece_on_square(position, from_square)
+
+    if piece not in (Piece.wK, Piece.bK):
+        return None, None
+
+    for side, route in get_available_castles(position, from_square):
+        if target_square == route["king_to"]:
+            return side, route
+
+    return None, None
+
+
+def apply_castling_move(position, side, route):
+    """Apply castling by moving both the king and rook once."""
+    color = position.color_to_move
+    king_piece = Piece.wK if color == Color.WHITE else Piece.bK
+    rook_piece = Piece.wR if color == Color.WHITE else Piece.bR
+
+    position.piece_map[king_piece].discard(route["king_from"])
+    position.piece_map[king_piece].add(route["king_to"])
+
+    position.piece_map[rook_piece].discard(route["rook_from"])
+    position.piece_map[rook_piece].add(route["rook_to"])
+
+    # Castling can only happen once because moving the king removes both rights.
+    position.castle_rights[color] = [0, 0]
+    position.color_to_move = opposite_color(position.color_to_move)
+    sync_engine_state(position)
+
+    return True
+
+
+def update_castle_rights_after_normal_move(position, piece, from_square, target_square, captured_piece):
+    """Remove castling rights after king/rook movement or original rook capture."""
+    moving_color = piece_color(piece)
+
+    if piece in (Piece.wK, Piece.bK):
+        position.castle_rights[moving_color] = [0, 0]
+
+    elif piece in (Piece.wR, Piece.bR):
+        side = get_castle_side_from_rook_square(moving_color, from_square)
+        if side == "kingside":
+            position.castle_rights[moving_color][0] = 0
+        elif side == "queenside":
+            position.castle_rights[moving_color][1] = 0
+
+    if captured_piece in (Piece.wR, Piece.bR):
+        captured_color = piece_color(captured_piece)
+        side = get_castle_side_from_rook_square(captured_color, target_square)
+        if side == "kingside":
+            position.castle_rights[captured_color][0] = 0
+        elif side == "queenside":
+            position.castle_rights[captured_color][1] = 0
+
+
+def get_gui_move_notation(position, from_square, target_square):
+    """Return readable move notation for GUI move history."""
+    side, _ = get_castling_route_for_selection(position, from_square, target_square)
+
+    if side == "kingside":
+        return "O-O"
+
+    if side == "queenside":
+        return "O-O-O"
+
+    return f"{square_to_algebraic(from_square)}{square_to_algebraic(target_square)}"
+
+
 # ---------------------------------------------------------------------
 # Legal move engine used by the GUI
 # ---------------------------------------------------------------------
@@ -596,6 +817,11 @@ def calculate_legal_moves(position, from_square):
         if not is_square_attacked(simulated_map, king_square, enemy_color):
             legal_moves.append(target_square)
 
+    # Add castling targets for a selected king or rook.
+    for castle_target in calculate_castle_targets(position, from_square):
+        if castle_target not in legal_moves:
+            legal_moves.append(castle_target)
+
     return legal_moves
 
 
@@ -606,8 +832,21 @@ def apply_gui_move(position, from_square, target_square):
     if piece is None:
         return False
 
+    side, route = get_castling_route_for_selection(position, from_square, target_square)
+    if route is not None:
+        return apply_castling_move(position, side, route)
+
     if target_square not in calculate_legal_moves(position, from_square):
         return False
+
+    captured_piece = get_piece_on_square(position, target_square)
+    update_castle_rights_after_normal_move(
+        position,
+        piece,
+        from_square,
+        target_square,
+        captured_piece,
+    )
 
     position.piece_map = apply_move_to_piece_map(
         position.piece_map,
@@ -704,6 +943,32 @@ def draw_selected_square(screen, selected_square):
         pygame.Rect(x, y, CURRENT_SQUARE_SIZE, CURRENT_SQUARE_SIZE),
         max(1, CURRENT_SQUARE_SIZE // 40),
     )
+
+
+def draw_castle_highlights(screen, castle_highlights):
+    """Highlight the king and rook when castling is available."""
+    for square in castle_highlights:
+        x, y = square_to_screen(square)
+
+        highlight_surface = pygame.Surface(
+            (CURRENT_SQUARE_SIZE, CURRENT_SQUARE_SIZE),
+            pygame.SRCALPHA,
+        )
+        highlight_surface.fill(CASTLE_FILL)
+        screen.blit(highlight_surface, (x, y))
+
+        inset = max(2, CURRENT_SQUARE_SIZE // 18)
+        pygame.draw.rect(
+            screen,
+            CASTLE_BORDER,
+            pygame.Rect(
+                x + inset,
+                y + inset,
+                CURRENT_SQUARE_SIZE - inset * 2,
+                CURRENT_SQUARE_SIZE - inset * 2,
+            ),
+            max(2, CURRENT_SQUARE_SIZE // 24),
+        )
 
 
 def draw_legal_moves(screen, legal_moves, position):
@@ -1173,12 +1438,13 @@ def draw_game_side_panel(screen, position, settings, clocks, move_history, statu
         draw_text(screen, status_message, small_font, PANEL_MUTED, (status_rect.x + 10, status_rect.y + 8))
 
 
-def draw_game(screen, position, piece_images, selected_square, legal_moves, settings, clocks, move_history, status_message):
+def draw_game(screen, position, piece_images, selected_square, legal_moves, castle_highlights, settings, clocks, move_history, status_message):
     """Draw the game board and the right-side match panel."""
     update_board_layout(screen)
     _, _, _, _, _, coordinate_font = make_fonts(*screen.get_size())
     screen.fill(MENU_BG)
     draw_board(screen)
+    draw_castle_highlights(screen, castle_highlights)
     draw_legal_moves(screen, legal_moves, position)
     draw_selected_square(screen, selected_square)
     draw_pieces(screen, position, piece_images)
@@ -1205,6 +1471,7 @@ def main():
 
     selected_square = None
     legal_moves = []
+    castle_highlights = []
     screen_mode = "menu"
     settings = {
         "mode": "Player vs Player",
@@ -1300,6 +1567,7 @@ def main():
 
                         selected_square = None
                         legal_moves = []
+                        castle_highlights = []
                         move_history = []
                         status_message = ""
                         last_warning_message = None
@@ -1331,6 +1599,7 @@ def main():
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     selected_square = None
                     legal_moves = []
+                    castle_highlights = []
                     screen_mode = "menu"
                     pygame.display.set_caption("An Chess Engine - Menu")
                     screen = pygame.display.set_mode((MENU_WIDTH, MENU_HEIGHT), pygame.RESIZABLE)
@@ -1347,30 +1616,31 @@ def main():
                         if is_current_turn_piece(position, clicked_piece):
                             selected_square = clicked_square
                             legal_moves = calculate_legal_moves(position, selected_square)
+                            castle_highlights = calculate_castle_highlights(position, selected_square)
                             set_status(f"Selected {square_to_algebraic(clicked_square)}")
                         else:
                             selected_square = None
                             legal_moves = []
+                            castle_highlights = []
                             set_status("Select one of your own pieces.", dedupe=True)
 
                     else:
                         if clicked_square == selected_square:
                             selected_square = None
                             legal_moves = []
+                            castle_highlights = []
                             set_status("Selection cleared.")
 
                         elif is_current_turn_piece(position, clicked_piece):
                             selected_square = clicked_square
                             legal_moves = calculate_legal_moves(position, selected_square)
+                            castle_highlights = calculate_castle_highlights(position, selected_square)
                             set_status(f"Selected {square_to_algebraic(clicked_square)}")
 
                         elif clicked_square in legal_moves:
                             from_square = selected_square
                             moved_colour = position.color_to_move
-                            move_text = (
-                                f"{square_to_algebraic(from_square)}"
-                                f"{square_to_algebraic(clicked_square)}"
-                            )
+                            move_text = get_gui_move_notation(position, from_square, clicked_square)
 
                             if apply_gui_move(position, selected_square, clicked_square):
                                 move_history.append(move_text)
@@ -1382,6 +1652,7 @@ def main():
 
                             selected_square = None
                             legal_moves = []
+                            castle_highlights = []
                             side = "White" if position.color_to_move == Color.WHITE else "Black"
                             pygame.display.set_caption(f"An Chess Engine GUI - {side} to move")
 
@@ -1394,6 +1665,7 @@ def main():
                             set_status(illegal_text)
                             selected_square = None
                             legal_moves = []
+                            castle_highlights = []
 
         if screen_mode == "game":
             draw_game(
@@ -1402,6 +1674,7 @@ def main():
                 piece_images,
                 selected_square,
                 legal_moves,
+                castle_highlights,
                 settings,
                 clocks,
                 move_history,
