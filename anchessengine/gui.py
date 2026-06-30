@@ -12,8 +12,10 @@ SQUARE_SIZE = WIDTH // 8
 
 LIGHT_SQUARE = (238, 238, 210)
 DARK_SQUARE = (118, 150, 86)
+SELECTED_SQUARE = (255, 220, 80)
 
-ASSET_DIR = os.path.join("assets", "pieces")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(__file__))
+ASSET_DIR = os.path.join(PROJECT_ROOT, "assets", "pieces")
 
 PIECE_IMAGE_FILES = {
     "black_king": "Chess_kdt60.png",
@@ -30,22 +32,38 @@ PIECE_IMAGE_FILES = {
     "white_pawn": "Chess_plt60.png",
 }
 
+SELECTED_LIGHT_FILL = (70, 140, 230, 160)
+SELECTED_DARK_FILL = (70, 140, 230, 100)
+SELECTED_BORDER = (20, 20, 20)
 
 def load_piece_images():
-    """Load and resize chess piece images."""
+    """Load, crop and resize chess piece images."""
     images = {}
+    target_size = SQUARE_SIZE - 22
 
     for key, filename in PIECE_IMAGE_FILES.items():
         path = os.path.join(ASSET_DIR, filename)
-        image = pygame.image.load(path).convert_alpha()
-        image = pygame.transform.smoothscale(
-            image,
-            (SQUARE_SIZE - 10, SQUARE_SIZE - 10),
+
+        raw_image = pygame.image.load(path).convert_alpha()
+
+        # Crop transparent padding around the actual piece.
+        bounding_rect = raw_image.get_bounding_rect()
+        cropped_image = raw_image.subsurface(bounding_rect).copy()
+
+        width, height = cropped_image.get_size()
+        scale = min(target_size / width, target_size / height)
+
+        new_width = int(width * scale)
+        new_height = int(height * scale)
+
+        resized_image = pygame.transform.smoothscale(
+            cropped_image,
+            (new_width, new_height),
         )
-        images[key] = image
+
+        images[key] = resized_image
 
     return images
-
 
 def square_to_screen(square):
     """Convert internal square number into screen coordinates."""
@@ -59,6 +77,19 @@ def square_to_screen(square):
     y = row * SQUARE_SIZE
 
     return x, y
+
+
+def screen_to_square(mouse_pos):
+    """Convert mouse position into an internal square number."""
+    x, y = mouse_pos
+
+    col = x // SQUARE_SIZE
+    row = y // SQUARE_SIZE
+
+    rank_index = 7 - row
+    file_index = col
+
+    return rank_index * 8 + file_index
 
 
 def draw_board(screen):
@@ -79,8 +110,34 @@ def draw_board(screen):
             )
 
 
+def draw_selected_square(screen, selected_square):
+    """Highlight the selected square with a filled overlay."""
+    if selected_square is None:
+        return
+
+    x, y = square_to_screen(selected_square)
+
+    col = x // SQUARE_SIZE
+    row = y // SQUARE_SIZE
+
+    is_light_square = (row + col) % 2 == 0
+
+    fill_colour = SELECTED_LIGHT_FILL if is_light_square else SELECTED_DARK_FILL
+
+    highlight_surface = pygame.Surface((SQUARE_SIZE, SQUARE_SIZE), pygame.SRCALPHA)
+    highlight_surface.fill(fill_colour)
+    screen.blit(highlight_surface, (x, y))
+
+    pygame.draw.rect(
+        screen,
+        SELECTED_BORDER,
+        pygame.Rect(x, y, SQUARE_SIZE, SQUARE_SIZE),
+        2,
+    )
+
+
 def get_piece_image(piece, piece_images):
-    """Return the correct image for a chess piece."""
+    """Return the matching image for a chess piece."""
     if piece == Piece.wK:
         return piece_images["white_king"]
     if piece == Piece.bK:
@@ -139,6 +196,7 @@ def main():
 
     piece_images = load_piece_images()
     position = Position()
+    selected_square = None
 
     running = True
 
@@ -147,7 +205,11 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
 
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                selected_square = screen_to_square(event.pos)
+
         draw_board(screen)
+        draw_selected_square(screen, selected_square)
         draw_pieces(screen, position, piece_images)
 
         pygame.display.flip()
