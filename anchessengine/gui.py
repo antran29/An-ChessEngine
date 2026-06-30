@@ -91,6 +91,24 @@ def screen_to_square(mouse_pos):
 
     return rank_index * 8 + file_index
 
+def get_piece_on_square(position, square):
+    """Return the piece on a square, or None if the square is empty."""
+    for piece, squares in position.piece_map.items():
+        if square in squares:
+            return piece
+
+    return None
+
+def square_to_algebraic(square):
+    """Convert internal square number to chess notation."""
+    files = "abcdefgh"
+
+    file_index = square % 8
+    rank_index = square // 8
+
+    return f"{files[file_index]}{rank_index + 1}"
+
+
 
 def draw_board(screen):
     """Draw the 8x8 chess board."""
@@ -206,7 +224,14 @@ def main():
                 running = False
 
             if event.type == pygame.MOUSEBUTTONDOWN:
-                selected_square = screen_to_square(event.pos)
+                clicked_square = screen_to_square(event.pos)
+                clicked_piece = get_piece_on_square(position, clicked_square)
+
+                if clicked_piece is not None:
+                    selected_square = clicked_square
+                    print(f"Selected piece on {square_to_algebraic(clicked_square)}")
+                else:
+                    selected_square = None
 
         draw_board(screen)
         draw_selected_square(screen, selected_square)
