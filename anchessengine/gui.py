@@ -1,4 +1,5 @@
 import os
+import time
 
 import pygame
 
@@ -59,10 +60,56 @@ PIECE_IMAGE_FILES = {
 
 MODE_OPTIONS = ["Player vs Player"]
 TURN_OPTIONS = ["White", "Black"]
-TIMER_OPTIONS = ["No Timer", "5 min", "10 min", "15 + 10"]
+TIMER_OPTIONS = [
+    "No Timer",
+    "5 minutes",
+    "10 minutes",
+    "10 minutes + 5 seconds per move",
+]
+
+
+def get_timer_settings(timer_label):
+    """Return starting seconds and increment seconds for a menu timer label."""
+    if timer_label in ("5 min", "5 minutes"):
+        return 5 * 60, 0
+    if timer_label in ("10 min", "10 minutes"):
+        return 10 * 60, 0
+    if timer_label in ("10 + 5", "10 minutes + 5 seconds per move"):
+        return 10 * 60, 5
+
+    return None, 0
+
+
+def format_clock_time(seconds):
+    """Format a clock value as MM:SS:CS.
+
+    CS means centiseconds, so the last two digits show hundredths of
+    a second. This keeps the timer compact while still showing
+    sub-second countdown movement.
+    """
+    if seconds is None:
+        return "--:--:--"
+
+    total_centiseconds = max(0, int(seconds * 100))
+    minutes = total_centiseconds // 6000
+    remaining_centiseconds = total_centiseconds % 6000
+    whole_seconds = remaining_centiseconds // 100
+    centiseconds = remaining_centiseconds % 100
+
+    return f"{minutes:02d}:{whole_seconds:02d}:{centiseconds:02d}"
 
 CURRENT_BOARD_RECT = pygame.Rect(0, 0, BOARD_SIZE, BOARD_SIZE)
 CURRENT_SQUARE_SIZE = SQUARE_SIZE
+CURRENT_SIDE_PANEL_RECT = pygame.Rect(0, 0, 0, 0)
+
+GAME_PANEL_WIDTH = 300
+PANEL_BG = (31, 45, 37)
+PANEL_CARD = (44, 62, 50)
+PANEL_ACTIVE = (91, 130, 70)
+PANEL_BORDER = (93, 125, 86)
+PANEL_TEXT = (245, 245, 235)
+PANEL_MUTED = (185, 195, 185)
+PANEL_WARNING = (220, 90, 90)
 
 
 # ---------------------------------------------------------------------
@@ -129,20 +176,40 @@ def make_fonts(width, height):
 
 
 def update_board_layout(screen):
-    """Resize and centre the chess board inside the current game window."""
-    global CURRENT_BOARD_RECT, CURRENT_SQUARE_SIZE
+    """Resize the board and reserve a right panel for game information."""
+    global CURRENT_BOARD_RECT, CURRENT_SQUARE_SIZE, CURRENT_SIDE_PANEL_RECT
 
     width, height = screen.get_size()
-    board_size = min(width, height) - 20
-    board_size = max(320, board_size)
-    board_size -= board_size % 8
 
-    x = (width - board_size) // 2
-    y = (height - board_size) // 2
+    if width >= 880:
+        panel_width = min(GAME_PANEL_WIDTH, max(250, int(width * 0.28)))
+        available_width = width - panel_width - 30
+        board_size = min(available_width, height - 20)
+        board_size = max(320, board_size)
+        board_size -= board_size % 8
 
-    CURRENT_BOARD_RECT = pygame.Rect(x, y, board_size, board_size)
-    CURRENT_SQUARE_SIZE = board_size // 8
+        x = 10
+        y = (height - board_size) // 2
 
+        CURRENT_BOARD_RECT = pygame.Rect(x, y, board_size, board_size)
+        CURRENT_SQUARE_SIZE = board_size // 8
+        CURRENT_SIDE_PANEL_RECT = pygame.Rect(
+            CURRENT_BOARD_RECT.right + 10,
+            10,
+            width - CURRENT_BOARD_RECT.right - 20,
+            height - 20,
+        )
+    else:
+        board_size = min(width, height) - 20
+        board_size = max(320, board_size)
+        board_size -= board_size % 8
+
+        x = (width - board_size) // 2
+        y = (height - board_size) // 2
+
+        CURRENT_BOARD_RECT = pygame.Rect(x, y, board_size, board_size)
+        CURRENT_SQUARE_SIZE = board_size // 8
+        CURRENT_SIDE_PANEL_RECT = pygame.Rect(0, 0, 0, 0)
 
 def scale_image_to_square(image):
     """Scale a piece image to the current square size."""
@@ -754,6 +821,24 @@ def draw_text(screen, text, font, colour, position, center=False):
     return rect
 
 
+def draw_text_fit(screen, text, font, colour, rect, left_padding=18, right_padding=40):
+    """Draw text inside a rectangle, reducing font size if needed."""
+    max_width = max(20, rect.width - left_padding - right_padding)
+    font_size = font.get_height()
+    fitted_font = font
+
+    while fitted_font.size(text)[0] > max_width and font_size > 14:
+        font_size -= 1
+        fitted_font = pygame.font.SysFont("Arial", font_size, bold=True)
+
+    surface = fitted_font.render(text, True, colour)
+    text_rect = surface.get_rect()
+    text_rect.left = rect.x + left_padding
+    text_rect.centery = rect.centery
+    screen.blit(surface, text_rect)
+    return text_rect
+
+
 def draw_menu_button(screen, rect, text, font, bg_colour, border_colour, text_colour):
     """Draw a solid rectangular button."""
     pygame.draw.rect(screen, bg_colour, rect)
@@ -776,7 +861,7 @@ def draw_dropdown(screen, main_rect, options, selected_value, font):
         fill = MENU_GREEN if option == selected_value else MENU_DROPDOWN
         pygame.draw.rect(screen, fill, rect)
         pygame.draw.rect(screen, MENU_BORDER, rect, 2)
-        draw_text(screen, option, font, MENU_TEXT, (rect.x + 18, rect.y + 14))
+        draw_text_fit(screen, option, font, MENU_TEXT, rect, right_padding=18)
         option_rects.append((rect, option))
 
     return option_rects
@@ -786,7 +871,7 @@ def draw_option_box(screen, rect, label, value, font):
     """Draw a clickable setup option."""
     pygame.draw.rect(screen, MENU_OPTION, rect)
     pygame.draw.rect(screen, MENU_GREEN, rect, 2)
-    draw_text(screen, f"{label}: {value}", font, MENU_TEXT, (rect.x + 18, rect.y + 14))
+    draw_text_fit(screen, f"{label}: {value}", font, MENU_TEXT, rect, right_padding=48)
     draw_text(screen, "v", font, MENU_TEXT, (rect.right - 32, rect.y + 14))
 
 
@@ -875,7 +960,7 @@ def draw_menu(screen, logo, settings, dropdown_open, menu_message):
     draw_option_box(screen, turn_rect, "First turn", settings["turn"], body_font)
     draw_option_box(screen, timer_rect, "Timer", settings["timer"], body_font)
 
-    controls_y = min(timer_rect.bottom + int(height * 0.055), int(height * 0.61))
+    controls_y = min(timer_rect.bottom + int(height * 0.050), int(height * 0.61))
     draw_text(screen, "Controls", body_font, MENU_TEXT, (right_x, controls_y))
 
     controls = [
@@ -884,29 +969,41 @@ def draw_menu(screen, logo, settings, dropdown_open, menu_message):
         "Press ESC during the game to return here.",
     ]
 
+    control_line_gap = max(22, int(height * 0.038))
+    first_control_y = controls_y + max(28, int(height * 0.045))
+
     for index, line in enumerate(controls):
         draw_text(
             screen,
             line,
             small_font,
             MENU_MUTED,
-            (right_x, controls_y + 34 + index * 25),
+            (right_x, first_control_y + index * control_line_gap),
         )
 
+    message_y = first_control_y + len(controls) * control_line_gap + 10
     if menu_message:
-        draw_text(screen, menu_message, small_font, MENU_GREEN, (right_x, int(height * 0.74)))
+        draw_text(screen, menu_message, small_font, MENU_GREEN, (right_x, message_y))
+
+    start_height = max(50, int(height * 0.085))
+    quit_height = max(38, int(height * 0.06))
+    button_gap = max(10, int(height * 0.018))
+    start_y = max(message_y + 32, height - start_height - quit_height - button_gap - 16)
+
+    if start_y + start_height + button_gap + quit_height > height - 8:
+        start_y = height - start_height - quit_height - button_gap - 8
 
     start_button = pygame.Rect(
         right_x,
-        height - max(105, int(height * 0.17)),
+        start_y,
         right_inner_width,
-        max(50, int(height * 0.085)),
+        start_height,
     )
     quit_button = pygame.Rect(
         right_x,
-        start_button.bottom + max(10, int(height * 0.018)),
+        start_button.bottom + button_gap,
         right_inner_width,
-        max(38, int(height * 0.06)),
+        quit_height,
     )
 
     draw_menu_button(
@@ -964,8 +1061,120 @@ def draw_menu(screen, logo, settings, dropdown_open, menu_message):
     }
 
 
-def draw_game(screen, position, piece_images, selected_square, legal_moves):
-    """Draw the game board."""
+def draw_game_side_panel(screen, position, settings, clocks, move_history, status_message):
+    """Draw timers, current turn, and move history beside the board."""
+    if CURRENT_SIDE_PANEL_RECT.width <= 0:
+        return
+
+    panel = CURRENT_SIDE_PANEL_RECT
+    pygame.draw.rect(screen, PANEL_BG, panel)
+    pygame.draw.rect(screen, PANEL_BORDER, panel, 2)
+
+    title_font = pygame.font.SysFont("Arial", max(22, panel.width // 10), bold=True)
+    heading_font = pygame.font.SysFont("Arial", max(18, panel.width // 14), bold=True)
+    body_font = pygame.font.SysFont("Arial", max(16, panel.width // 18), bold=True)
+    small_font = pygame.font.SysFont("Arial", max(14, panel.width // 22), bold=True)
+
+    margin = max(14, panel.width // 18)
+    y = panel.y + margin
+
+    side = "White" if position.color_to_move == Color.WHITE else "Black"
+    draw_text(screen, f"{side} to move", title_font, PANEL_TEXT, (panel.x + margin, y))
+    y += max(42, panel.height // 13)
+
+    timer_total, _ = get_timer_settings(settings["timer"])
+
+    def draw_clock_box(label, colour, value, active, top_y):
+        rect = pygame.Rect(
+            panel.x + margin,
+            top_y,
+            panel.width - margin * 2,
+            max(62, panel.height // 10),
+        )
+        fill = PANEL_ACTIVE if active else PANEL_CARD
+        pygame.draw.rect(screen, fill, rect)
+        pygame.draw.rect(screen, PANEL_BORDER, rect, 2)
+        draw_text(screen, label, small_font, colour, (rect.x + 12, rect.y + 8))
+
+        value_surface = heading_font.render(value, True, PANEL_TEXT)
+        value_rect = value_surface.get_rect()
+        value_rect.centery = rect.centery
+        value_rect.right = rect.right - 12
+        screen.blit(value_surface, value_rect)
+
+        return rect.bottom + max(10, panel.height // 45)
+
+    if timer_total is None:
+        black_time = "No Timer"
+        white_time = "No Timer"
+    else:
+        black_time = format_clock_time(clocks[Color.BLACK])
+        white_time = format_clock_time(clocks[Color.WHITE])
+
+    y = draw_clock_box("Black", PANEL_TEXT, black_time, position.color_to_move == Color.BLACK, y)
+    y = draw_clock_box("White", PANEL_TEXT, white_time, position.color_to_move == Color.WHITE, y)
+
+    y += max(10, panel.height // 50)
+    draw_text(screen, "Move History", heading_font, PANEL_TEXT, (panel.x + margin, y))
+    y += max(34, panel.height // 16)
+
+    status_box_height = max(34, panel.height // 18)
+    status_y = panel.bottom - margin - status_box_height
+
+    history_rect = pygame.Rect(
+        panel.x + margin,
+        y,
+        panel.width - margin * 2,
+        max(130, status_y - y - margin),
+    )
+    pygame.draw.rect(screen, PANEL_CARD, history_rect)
+    pygame.draw.rect(screen, PANEL_BORDER, history_rect, 2)
+
+    line_y = history_rect.y + 10
+    line_gap = max(22, panel.height // 28)
+    max_lines = max(4, (history_rect.height - 20) // line_gap)
+
+    paired_moves = []
+    for index in range(0, len(move_history), 2):
+        move_number = index // 2 + 1
+        white_move = move_history[index]
+        black_move = move_history[index + 1] if index + 1 < len(move_history) else ""
+        paired_moves.append(f"{move_number}. {white_move}   {black_move}")
+
+    visible_moves = paired_moves[-max_lines:]
+    if not visible_moves:
+        draw_text(
+            screen,
+            "No moves yet.",
+            small_font,
+            PANEL_MUTED,
+            (history_rect.x + 10, line_y),
+        )
+    else:
+        for line in visible_moves:
+            draw_text(
+                screen,
+                line,
+                small_font,
+                PANEL_TEXT,
+                (history_rect.x + 10, line_y),
+            )
+            line_y += line_gap
+
+    if status_message:
+        status_rect = pygame.Rect(
+            panel.x + margin,
+            status_y,
+            panel.width - margin * 2,
+            status_box_height,
+        )
+        pygame.draw.rect(screen, PANEL_CARD, status_rect)
+        pygame.draw.rect(screen, PANEL_BORDER, status_rect, 1)
+        draw_text(screen, status_message, small_font, PANEL_MUTED, (status_rect.x + 10, status_rect.y + 8))
+
+
+def draw_game(screen, position, piece_images, selected_square, legal_moves, settings, clocks, move_history, status_message):
+    """Draw the game board and the right-side match panel."""
     update_board_layout(screen)
     _, _, _, _, _, coordinate_font = make_fonts(*screen.get_size())
     screen.fill(MENU_BG)
@@ -974,6 +1183,7 @@ def draw_game(screen, position, piece_images, selected_square, legal_moves):
     draw_selected_square(screen, selected_square)
     draw_pieces(screen, position, piece_images)
     draw_coordinates(screen, coordinate_font)
+    draw_game_side_panel(screen, position, settings, clocks, move_history, status_message)
 
 
 # ---------------------------------------------------------------------
@@ -1004,9 +1214,44 @@ def main():
     dropdown_open = None
     menu_message = ""
     menu_buttons = {}
+    move_history = []
+    status_message = ""
+    last_warning_message = None
+    timer_total = None
+    timer_increment = 0
+    clocks = {
+        Color.WHITE: None,
+        Color.BLACK: None,
+    }
+    last_timer_update = time.monotonic()
     running = True
 
+    def set_status(message, dedupe=False):
+        """Update status text and avoid repeating the same warning message."""
+        nonlocal status_message, last_warning_message
+
+        if dedupe and message == last_warning_message:
+            status_message = message
+            return
+
+        print(message)
+        status_message = message
+        last_warning_message = message if dedupe else None
+
     while running:
+        now = time.monotonic()
+        if screen_mode == "game" and timer_total is not None:
+            elapsed = now - last_timer_update
+            active_colour = position.color_to_move
+            clocks[active_colour] = max(0, clocks[active_colour] - elapsed)
+            last_timer_update = now
+
+            if clocks[active_colour] <= 0:
+                side = "White" if active_colour == Color.WHITE else "Black"
+                set_status(f"{side} ran out of time.", dedupe=True)
+        else:
+            last_timer_update = now
+
         if screen_mode == "menu":
             menu_buttons = draw_menu(screen, logo, settings, dropdown_open, menu_message)
             pygame.display.flip()
@@ -1016,8 +1261,12 @@ def main():
                 running = False
 
             if event.type == pygame.VIDEORESIZE:
-                new_width = max(760, event.w)
-                new_height = max(520, event.h)
+                if screen_mode == "game":
+                    new_width = max(900, event.w)
+                    new_height = max(560, event.h)
+                else:
+                    new_width = max(760, event.w)
+                    new_height = max(520, event.h)
                 screen = pygame.display.set_mode((new_width, new_height), pygame.RESIZABLE)
 
             if screen_mode == "menu":
@@ -1042,11 +1291,23 @@ def main():
                         else:
                             position.color_to_move = Color.WHITE
                         sync_engine_state(position)
+
+                        timer_total, timer_increment = get_timer_settings(settings["timer"])
+                        clocks = {
+                            Color.WHITE: timer_total,
+                            Color.BLACK: timer_total,
+                        }
+
                         selected_square = None
                         legal_moves = []
+                        move_history = []
+                        status_message = ""
+                        last_warning_message = None
                         screen_mode = "game"
+                        last_timer_update = time.monotonic()
                         side = "White" if position.color_to_move == Color.WHITE else "Black"
                         pygame.display.set_caption(f"An Chess Engine GUI - {side} to move")
+                        screen = pygame.display.set_mode((1000, 680), pygame.RESIZABLE)
 
                     elif menu_buttons.get("quit") and menu_buttons["quit"].collidepoint(event.pos):
                         running = False
@@ -1072,6 +1333,7 @@ def main():
                     legal_moves = []
                     screen_mode = "menu"
                     pygame.display.set_caption("An Chess Engine - Menu")
+                    screen = pygame.display.set_mode((MENU_WIDTH, MENU_HEIGHT), pygame.RESIZABLE)
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     update_board_layout(screen)
@@ -1085,36 +1347,38 @@ def main():
                         if is_current_turn_piece(position, clicked_piece):
                             selected_square = clicked_square
                             legal_moves = calculate_legal_moves(position, selected_square)
-                            print(f"Selected {square_to_algebraic(clicked_square)}")
+                            set_status(f"Selected {square_to_algebraic(clicked_square)}")
                         else:
                             selected_square = None
                             legal_moves = []
-                            print("Select one of your own pieces.")
+                            set_status("Select one of your own pieces.", dedupe=True)
 
                     else:
                         if clicked_square == selected_square:
                             selected_square = None
                             legal_moves = []
+                            set_status("Selection cleared.")
 
                         elif is_current_turn_piece(position, clicked_piece):
                             selected_square = clicked_square
                             legal_moves = calculate_legal_moves(position, selected_square)
-                            print(f"Selected {square_to_algebraic(clicked_square)}")
+                            set_status(f"Selected {square_to_algebraic(clicked_square)}")
 
                         elif clicked_square in legal_moves:
                             from_square = selected_square
+                            moved_colour = position.color_to_move
+                            move_text = (
+                                f"{square_to_algebraic(from_square)}"
+                                f"{square_to_algebraic(clicked_square)}"
+                            )
+
                             if apply_gui_move(position, selected_square, clicked_square):
-                                print(
-                                    f"Moved "
-                                    f"{square_to_algebraic(from_square)}"
-                                    f"{square_to_algebraic(clicked_square)}"
-                                )
+                                move_history.append(move_text)
+                                if timer_total is not None and timer_increment > 0:
+                                    clocks[moved_colour] += timer_increment
+                                set_status(f"Moved {move_text}")
                             else:
-                                print(
-                                    f"Illegal move: "
-                                    f"{square_to_algebraic(from_square)}"
-                                    f"{square_to_algebraic(clicked_square)}"
-                                )
+                                set_status(f"Illegal move: {move_text}")
 
                             selected_square = None
                             legal_moves = []
@@ -1122,16 +1386,27 @@ def main():
                             pygame.display.set_caption(f"An Chess Engine GUI - {side} to move")
 
                         else:
-                            print(
+                            illegal_text = (
                                 f"Illegal move: "
                                 f"{square_to_algebraic(selected_square)}"
                                 f"{square_to_algebraic(clicked_square)}"
                             )
+                            set_status(illegal_text)
                             selected_square = None
                             legal_moves = []
 
         if screen_mode == "game":
-            draw_game(screen, position, piece_images, selected_square, legal_moves)
+            draw_game(
+                screen,
+                position,
+                piece_images,
+                selected_square,
+                legal_moves,
+                settings,
+                clocks,
+                move_history,
+                status_message,
+            )
             pygame.display.flip()
 
     pygame.quit()
