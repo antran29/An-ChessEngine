@@ -12,7 +12,7 @@ The purpose of this project is to make chess easier to interact with visually by
 
 ## Student Information
 
-- **Student:** Ayden James Tran  
+- **Student:** Le Bao An Tran  
 - **Course:** HSC Software Engineering  
 - **Project Type:** Advanced App / Chess Engine  
 - **Repository:** `An-ChessEngine`  
