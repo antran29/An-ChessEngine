@@ -114,6 +114,10 @@ PANEL_BORDER = (93, 125, 86)
 PANEL_TEXT = (245, 245, 235)
 PANEL_MUTED = (185, 195, 185)
 PANEL_WARNING = (220, 90, 90)
+PANEL_DANGER = (160, 58, 58)
+PANEL_DANGER_HOVER = (188, 70, 70)
+GAME_OVER_BG = (24, 35, 29)
+GAME_OVER_CARD = (38, 55, 45)
 
 
 # ---------------------------------------------------------------------
@@ -289,6 +293,11 @@ def square_to_algebraic(square):
 def opposite_color(color):
     """Return the opposite chess colour."""
     return Color.BLACK if color == Color.WHITE else Color.WHITE
+
+
+def color_name(color):
+    """Return a readable colour name."""
+    return "White" if color == Color.WHITE else "Black"
 
 
 def piece_color(piece):
@@ -1326,10 +1335,10 @@ def draw_menu(screen, logo, settings, dropdown_open, menu_message):
     }
 
 
-def draw_game_side_panel(screen, position, settings, clocks, move_history, status_message):
-    """Draw timers, current turn, and move history beside the board."""
+def draw_game_side_panel(screen, position, settings, clocks, move_history, status_message, surrender_pending=False):
+    """Draw timers, current turn, move history, and surrender button."""
     if CURRENT_SIDE_PANEL_RECT.width <= 0:
-        return
+        return {}
 
     panel = CURRENT_SIDE_PANEL_RECT
     pygame.draw.rect(screen, PANEL_BG, panel)
@@ -1343,7 +1352,7 @@ def draw_game_side_panel(screen, position, settings, clocks, move_history, statu
     margin = max(14, panel.width // 18)
     y = panel.y + margin
 
-    side = "White" if position.color_to_move == Color.WHITE else "Black"
+    side = color_name(position.color_to_move)
     draw_text(screen, f"{side} to move", title_font, PANEL_TEXT, (panel.x + margin, y))
     y += max(42, panel.height // 13)
 
@@ -1383,14 +1392,16 @@ def draw_game_side_panel(screen, position, settings, clocks, move_history, statu
     draw_text(screen, "Move History", heading_font, PANEL_TEXT, (panel.x + margin, y))
     y += max(34, panel.height // 16)
 
-    status_box_height = max(34, panel.height // 18)
+    status_box_height = max(38, panel.height // 18)
+    surrender_height = max(42, panel.height // 15)
     status_y = panel.bottom - margin - status_box_height
+    surrender_y = status_y - max(10, panel.height // 45) - surrender_height
 
     history_rect = pygame.Rect(
         panel.x + margin,
         y,
         panel.width - margin * 2,
-        max(130, status_y - y - margin),
+        max(90, surrender_y - y - margin),
     )
     pygame.draw.rect(screen, PANEL_CARD, history_rect)
     pygame.draw.rect(screen, PANEL_BORDER, history_rect, 2)
@@ -1426,19 +1437,35 @@ def draw_game_side_panel(screen, position, settings, clocks, move_history, statu
             )
             line_y += line_gap
 
+    surrender_rect = pygame.Rect(
+        panel.x + margin,
+        surrender_y,
+        panel.width - margin * 2,
+        surrender_height,
+    )
+    surrender_colour = PANEL_WARNING if surrender_pending else PANEL_DANGER
+    surrender_text = "Confirm Surrender" if surrender_pending else "Surrender"
+    pygame.draw.rect(screen, surrender_colour, surrender_rect)
+    pygame.draw.rect(screen, PANEL_BORDER, surrender_rect, 2)
+    draw_text(screen, surrender_text, body_font, PANEL_TEXT, surrender_rect.center, center=True)
+
+    status_rect = pygame.Rect(
+        panel.x + margin,
+        status_y,
+        panel.width - margin * 2,
+        status_box_height,
+    )
+    pygame.draw.rect(screen, PANEL_CARD, status_rect)
+    pygame.draw.rect(screen, PANEL_BORDER, status_rect, 1)
     if status_message:
-        status_rect = pygame.Rect(
-            panel.x + margin,
-            status_y,
-            panel.width - margin * 2,
-            status_box_height,
-        )
-        pygame.draw.rect(screen, PANEL_CARD, status_rect)
-        pygame.draw.rect(screen, PANEL_BORDER, status_rect, 1)
-        draw_text(screen, status_message, small_font, PANEL_MUTED, (status_rect.x + 10, status_rect.y + 8))
+        draw_text_fit(screen, status_message, small_font, PANEL_MUTED, status_rect, left_padding=10, right_padding=10)
+    else:
+        draw_text(screen, "Ready.", small_font, PANEL_MUTED, (status_rect.x + 10, status_rect.y + 9))
+
+    return {"surrender": surrender_rect}
 
 
-def draw_game(screen, position, piece_images, selected_square, legal_moves, castle_highlights, settings, clocks, move_history, status_message):
+def draw_game(screen, position, piece_images, selected_square, legal_moves, castle_highlights, settings, clocks, move_history, status_message, surrender_pending=False):
     """Draw the game board and the right-side match panel."""
     update_board_layout(screen)
     _, _, _, _, _, coordinate_font = make_fonts(*screen.get_size())
@@ -1449,7 +1476,44 @@ def draw_game(screen, position, piece_images, selected_square, legal_moves, cast
     draw_selected_square(screen, selected_square)
     draw_pieces(screen, position, piece_images)
     draw_coordinates(screen, coordinate_font)
-    draw_game_side_panel(screen, position, settings, clocks, move_history, status_message)
+    return draw_game_side_panel(screen, position, settings, clocks, move_history, status_message, surrender_pending)
+
+
+
+def draw_game_over(screen, winner_color, reason):
+    """Draw the end-game screen with rematch and menu buttons."""
+    width, height = screen.get_size()
+    title_font, heading_font, body_font, button_font, small_font, _ = make_fonts(width, height)
+
+    screen.fill(GAME_OVER_BG)
+
+    card_width = min(560, width - 80)
+    card_height = min(420, height - 80)
+    card = pygame.Rect(0, 0, card_width, card_height)
+    card.center = (width // 2, height // 2)
+
+    pygame.draw.rect(screen, GAME_OVER_CARD, card)
+    pygame.draw.rect(screen, MENU_BORDER, card, 3)
+
+    winner_text = f"{color_name(winner_color)} Wins"
+    loser_text = "Black loses" if winner_color == Color.WHITE else "White loses"
+
+    draw_text(screen, "Game Over", heading_font, MENU_MUTED, (card.centerx, card.y + 55), center=True)
+    draw_text(screen, winner_text, title_font, MENU_TEXT, (card.centerx, card.y + 115), center=True)
+    draw_text(screen, loser_text, body_font, MENU_MUTED, (card.centerx, card.y + 165), center=True)
+
+    if reason:
+        draw_text(screen, reason, small_font, MENU_GREEN, (card.centerx, card.y + 205), center=True)
+
+    button_width = card_width - 120
+    button_height = 58
+    rematch_button = pygame.Rect(card.x + 60, card.bottom - 150, button_width, button_height)
+    menu_button = pygame.Rect(card.x + 60, rematch_button.bottom + 18, button_width, button_height)
+
+    draw_menu_button(screen, rematch_button, "Rematch", button_font, MENU_GREEN, MENU_GREEN_DARK, MENU_TEXT)
+    draw_menu_button(screen, menu_button, "Return to Main Menu", body_font, MENU_DARK_BUTTON, MENU_BORDER, MENU_TEXT)
+
+    return {"rematch": rematch_button, "menu": menu_button}
 
 
 # ---------------------------------------------------------------------
@@ -1481,9 +1545,14 @@ def main():
     dropdown_open = None
     menu_message = ""
     menu_buttons = {}
+    game_buttons = {}
+    game_over_buttons = {}
     move_history = []
     status_message = ""
     last_warning_message = None
+    surrender_pending = False
+    game_over_winner = Color.WHITE
+    game_over_reason = ""
     timer_total = None
     timer_increment = 0
     clocks = {
@@ -1505,6 +1574,49 @@ def main():
         status_message = message
         last_warning_message = message if dedupe else None
 
+    def start_new_match():
+        """Start or restart a match using the current menu settings."""
+        nonlocal position, selected_square, legal_moves, castle_highlights
+        nonlocal move_history, status_message, last_warning_message, surrender_pending
+        nonlocal timer_total, timer_increment, clocks, last_timer_update, screen_mode, screen
+
+        position = Position()
+        position.color_to_move = Color.BLACK if settings["turn"] == "Black" else Color.WHITE
+        sync_engine_state(position)
+
+        timer_total, timer_increment = get_timer_settings(settings["timer"])
+        clocks = {
+            Color.WHITE: timer_total,
+            Color.BLACK: timer_total,
+        }
+
+        selected_square = None
+        legal_moves = []
+        castle_highlights = []
+        move_history = []
+        status_message = ""
+        last_warning_message = None
+        surrender_pending = False
+        screen_mode = "game"
+        last_timer_update = time.monotonic()
+        side = color_name(position.color_to_move)
+        pygame.display.set_caption(f"An Chess Engine GUI - {side} to move")
+        screen = pygame.display.set_mode((1000, 680), pygame.RESIZABLE)
+
+    def end_game(winner_colour, reason):
+        """Move to the end-game screen."""
+        nonlocal screen_mode, game_over_winner, game_over_reason, selected_square
+        nonlocal legal_moves, castle_highlights, surrender_pending
+
+        game_over_winner = winner_colour
+        game_over_reason = reason
+        selected_square = None
+        legal_moves = []
+        castle_highlights = []
+        surrender_pending = False
+        screen_mode = "game_over"
+        pygame.display.set_caption(f"An Chess Engine - {color_name(winner_colour)} Wins")
+
     while running:
         now = time.monotonic()
         if screen_mode == "game" and timer_total is not None:
@@ -1514,13 +1626,17 @@ def main():
             last_timer_update = now
 
             if clocks[active_colour] <= 0:
-                side = "White" if active_colour == Color.WHITE else "Black"
-                set_status(f"{side} ran out of time.", dedupe=True)
+                loser = active_colour
+                winner = opposite_color(loser)
+                end_game(winner, f"{color_name(loser)} ran out of time.")
         else:
             last_timer_update = now
 
         if screen_mode == "menu":
             menu_buttons = draw_menu(screen, logo, settings, dropdown_open, menu_message)
+            pygame.display.flip()
+        elif screen_mode == "game_over":
+            game_over_buttons = draw_game_over(screen, game_over_winner, game_over_reason)
             pygame.display.flip()
 
         for event in pygame.event.get():
@@ -1552,30 +1668,7 @@ def main():
                         continue
 
                     if menu_buttons.get("start") and menu_buttons["start"].collidepoint(event.pos):
-                        position = Position()
-                        if settings["turn"] == "Black":
-                            position.color_to_move = Color.BLACK
-                        else:
-                            position.color_to_move = Color.WHITE
-                        sync_engine_state(position)
-
-                        timer_total, timer_increment = get_timer_settings(settings["timer"])
-                        clocks = {
-                            Color.WHITE: timer_total,
-                            Color.BLACK: timer_total,
-                        }
-
-                        selected_square = None
-                        legal_moves = []
-                        castle_highlights = []
-                        move_history = []
-                        status_message = ""
-                        last_warning_message = None
-                        screen_mode = "game"
-                        last_timer_update = time.monotonic()
-                        side = "White" if position.color_to_move == Color.WHITE else "Black"
-                        pygame.display.set_caption(f"An Chess Engine GUI - {side} to move")
-                        screen = pygame.display.set_mode((1000, 680), pygame.RESIZABLE)
+                        start_new_match()
 
                     elif menu_buttons.get("quit") and menu_buttons["quit"].collidepoint(event.pos):
                         running = False
@@ -1595,17 +1688,41 @@ def main():
                     else:
                         dropdown_open = None
 
+            elif screen_mode == "game_over":
+                if event.type == pygame.MOUSEBUTTONDOWN:
+                    if game_over_buttons.get("rematch") and game_over_buttons["rematch"].collidepoint(event.pos):
+                        start_new_match()
+                    elif game_over_buttons.get("menu") and game_over_buttons["menu"].collidepoint(event.pos):
+                        screen_mode = "menu"
+                        pygame.display.set_caption("An Chess Engine - Menu")
+                        screen = pygame.display.set_mode((MENU_WIDTH, MENU_HEIGHT), pygame.RESIZABLE)
+
             elif screen_mode == "game":
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                     selected_square = None
                     legal_moves = []
                     castle_highlights = []
+                    surrender_pending = False
                     screen_mode = "menu"
                     pygame.display.set_caption("An Chess Engine - Menu")
                     screen = pygame.display.set_mode((MENU_WIDTH, MENU_HEIGHT), pygame.RESIZABLE)
 
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     update_board_layout(screen)
+
+                    if game_buttons.get("surrender") and game_buttons["surrender"].collidepoint(event.pos):
+                        if surrender_pending:
+                            loser = position.color_to_move
+                            winner = opposite_color(loser)
+                            end_game(winner, f"{color_name(loser)} surrendered.")
+                        else:
+                            surrender_pending = True
+                            set_status("Click Surrender again to confirm.", dedupe=True)
+                        continue
+
+                    if surrender_pending:
+                        surrender_pending = False
+
                     clicked_square = screen_to_square(event.pos)
                     clicked_piece = get_piece_on_square(position, clicked_square)
 
@@ -1653,7 +1770,8 @@ def main():
                             selected_square = None
                             legal_moves = []
                             castle_highlights = []
-                            side = "White" if position.color_to_move == Color.WHITE else "Black"
+                            surrender_pending = False
+                            side = color_name(position.color_to_move)
                             pygame.display.set_caption(f"An Chess Engine GUI - {side} to move")
 
                         else:
@@ -1668,7 +1786,7 @@ def main():
                             castle_highlights = []
 
         if screen_mode == "game":
-            draw_game(
+            game_buttons = draw_game(
                 screen,
                 position,
                 piece_images,
@@ -1679,6 +1797,7 @@ def main():
                 clocks,
                 move_history,
                 status_message,
+                surrender_pending,
             )
             pygame.display.flip()
 
