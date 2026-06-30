@@ -62,7 +62,6 @@ PIECE_IMAGE_FILES = {
     "white_pawn": "Chess_plt60.png",
 }
 
-MODE_OPTIONS = ["Player vs Player"]
 TURN_OPTIONS = ["White", "Black"]
 TIMER_OPTIONS = [
     "No Timer",
@@ -1216,7 +1215,7 @@ def draw_menu(screen, logo, settings, dropdown_open, menu_message):
     draw_text(screen, "Game Setup", heading_font, MENU_TEXT, (right_x, int(height * 0.13)))
     draw_text(
         screen,
-        "Choose your settings and start playing.",
+        "Choose your turn and timer, then start playing.",
         body_font,
         MENU_MUTED,
         (right_x, int(height * 0.20)),
@@ -1226,11 +1225,9 @@ def draw_menu(screen, logo, settings, dropdown_open, menu_message):
     option_gap = max(12, int(height * 0.025))
     option_y = int(height * 0.30)
 
-    mode_rect = pygame.Rect(right_x, option_y, right_inner_width, option_height)
-    turn_rect = pygame.Rect(right_x, mode_rect.bottom + option_gap, right_inner_width, option_height)
+    turn_rect = pygame.Rect(right_x, option_y, right_inner_width, option_height)
     timer_rect = pygame.Rect(right_x, turn_rect.bottom + option_gap, right_inner_width, option_height)
 
-    draw_option_box(screen, mode_rect, "Mode", settings["mode"], body_font)
     draw_option_box(screen, turn_rect, "First turn", settings["turn"], body_font)
     draw_option_box(screen, timer_rect, "Timer", settings["timer"], body_font)
 
@@ -1300,15 +1297,7 @@ def draw_menu(screen, logo, settings, dropdown_open, menu_message):
     )
 
     dropdown_rects = []
-    if dropdown_open == "mode":
-        dropdown_rects = [("mode", rect, value) for rect, value in draw_dropdown(
-            screen,
-            mode_rect,
-            MODE_OPTIONS,
-            settings["mode"],
-            body_font,
-        )]
-    elif dropdown_open == "turn":
+    if dropdown_open == "turn":
         dropdown_rects = [("turn", rect, value) for rect, value in draw_dropdown(
             screen,
             turn_rect,
@@ -1326,7 +1315,6 @@ def draw_menu(screen, logo, settings, dropdown_open, menu_message):
         )]
 
     return {
-        "mode": mode_rect,
         "turn": turn_rect,
         "timer": timer_rect,
         "start": start_button,
@@ -1538,7 +1526,6 @@ def main():
     castle_highlights = []
     screen_mode = "menu"
     settings = {
-        "mode": "Player vs Player",
         "turn": "White",
         "timer": "No Timer",
     }
@@ -1672,10 +1659,6 @@ def main():
 
                     elif menu_buttons.get("quit") and menu_buttons["quit"].collidepoint(event.pos):
                         running = False
-
-                    elif menu_buttons.get("mode") and menu_buttons["mode"].collidepoint(event.pos):
-                        dropdown_open = None if dropdown_open == "mode" else "mode"
-                        menu_message = "Choose a mode."
 
                     elif menu_buttons.get("turn") and menu_buttons["turn"].collidepoint(event.pos):
                         dropdown_open = None if dropdown_open == "turn" else "turn"
