@@ -263,38 +263,6 @@ Testing evidence and manual test cases are documented in:
 TESTING.md
 ```
 
-## Example Test Sequence
-
-A basic move sequence for testing normal movement:
-
-```text
-e2 → e4
-e7 → e5
-g1 → f3
-b8 → c6
-```
-
-A castling test sequence:
-
-```text
-e2 → e4
-e7 → e5
-g1 → f3
-b8 → c6
-f1 → c4
-g8 → f6
-e1 → g1
-```
-
-An en passant test sequence:
-
-```text
-e2 → e4
-a7 → a6
-e4 → e5
-d7 → d5
-e5 → d6
-```
 
 ## Major Modifications Made
 
