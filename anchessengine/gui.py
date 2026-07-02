@@ -1,3 +1,4 @@
+# EN PASSANT ACTUAL FIX: GUI now tracks double-pawn moves and removes the captured pawn.
 import os
 import time
 
@@ -579,7 +580,104 @@ def get_gui_move_notation(position, from_square, target_square):
     if side == "queenside":
         return "O-O-O"
 
+    piece = get_piece_on_square(position, from_square)
+    if get_en_passant_capture_square(position, piece, from_square, target_square) is not None:
+        return f"{square_to_algebraic(from_square)}x{square_to_algebraic(target_square)} e.p."
+
     return f"{square_to_algebraic(from_square)}{square_to_algebraic(target_square)}"
+
+
+# ---------------------------------------------------------------------
+# En passant helpers
+# ---------------------------------------------------------------------
+
+def get_en_passant_target(position):
+    """Return the GUI/engine en passant target square if one is currently available."""
+    target = getattr(position, "gui_en_passant_target", None)
+    if target is not None:
+        return target
+
+    target = getattr(position, "en_passant_target", None)
+    return target
+
+
+def get_en_passant_capture_square(position, piece, from_square, target_square):
+    """Return the square of the pawn captured by en passant, or None."""
+    if piece not in (Piece.wP, Piece.bP):
+        return None
+
+    en_passant_target = get_en_passant_target(position)
+    if en_passant_target is None or target_square != en_passant_target:
+        return None
+
+    from_file, from_rank = square_to_coords(from_square)
+    target_file, target_rank = square_to_coords(target_square)
+    color = piece_color(piece)
+    direction = 1 if color == Color.WHITE else -1
+
+    # En passant must be a one-square diagonal pawn move into an empty target square.
+    if abs(target_file - from_file) != 1 or target_rank - from_rank != direction:
+        return None
+
+    if get_piece_on_square(position, target_square) is not None:
+        return None
+
+    captured_square = coords_to_square(target_file, from_rank)
+    captured_piece = get_piece_on_square(position, captured_square)
+
+    if color == Color.WHITE and captured_piece == Piece.bP:
+        return captured_square
+
+    if color == Color.BLACK and captured_piece == Piece.wP:
+        return captured_square
+
+    return None
+
+
+def get_en_passant_move_for_piece(position, piece, from_square):
+    """Return an en passant target square for the selected pawn, if legal-looking."""
+    target = get_en_passant_target(position)
+    if target is None:
+        return None
+
+    if get_en_passant_capture_square(position, piece, from_square, target) is not None:
+        return target
+
+    return None
+
+
+def update_en_passant_state_after_move(position, piece, from_square, target_square):
+    """Track a double-pawn move so the opponent can capture en passant immediately."""
+    position.gui_en_passant_target = None
+    position.gui_en_passant_capture_square = None
+
+    try:
+        position.en_passant_target = None
+        position.is_en_passant_capture = False
+    except Exception:
+        pass
+
+    if piece not in (Piece.wP, Piece.bP):
+        return
+
+    from_file, from_rank = square_to_coords(from_square)
+    target_file, target_rank = square_to_coords(target_square)
+
+    if from_file != target_file or abs(target_rank - from_rank) != 2:
+        return
+
+    middle_rank = (from_rank + target_rank) // 2
+    en_passant_target = coords_to_square(from_file, middle_rank)
+
+    position.gui_en_passant_target = en_passant_target
+    position.gui_en_passant_capture_square = target_square
+
+    try:
+        position.en_passant_target = en_passant_target
+        # This side is the player who is allowed to make the en passant capture next.
+        position.en_passant_side = opposite_color(piece_color(piece))
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------
@@ -777,13 +875,18 @@ def is_square_attacked(piece_map, square, attacking_color):
     return False
 
 
-def apply_move_to_piece_map(piece_map, piece, from_square, target_square):
+def apply_move_to_piece_map(piece_map, piece, from_square, target_square, en_passant_capture_square=None):
     """Return a simulated piece map after a move."""
     simulated_map = clone_piece_map(piece_map)
 
-    captured_piece = get_piece_on_square_from_map(simulated_map, target_square)
-    if captured_piece is not None:
-        simulated_map[captured_piece].discard(target_square)
+    if en_passant_capture_square is not None:
+        captured_piece = get_piece_on_square_from_map(simulated_map, en_passant_capture_square)
+        if captured_piece is not None:
+            simulated_map[captured_piece].discard(en_passant_capture_square)
+    else:
+        captured_piece = get_piece_on_square_from_map(simulated_map, target_square)
+        if captured_piece is not None:
+            simulated_map[captured_piece].discard(target_square)
 
     simulated_map[piece].discard(from_square)
 
@@ -807,15 +910,28 @@ def calculate_legal_moves(position, from_square):
 
     legal_moves = []
     pseudo_moves = generate_piece_moves(position.piece_map, piece, from_square)
+
+    en_passant_target = get_en_passant_move_for_piece(position, piece, from_square)
+    if en_passant_target is not None and en_passant_target not in pseudo_moves:
+        pseudo_moves.append(en_passant_target)
+
     own_color = position.color_to_move
     enemy_color = opposite_color(own_color)
 
     for target_square in pseudo_moves:
+        en_passant_capture_square = get_en_passant_capture_square(
+            position,
+            piece,
+            from_square,
+            target_square,
+        )
+
         simulated_map = apply_move_to_piece_map(
             position.piece_map,
             piece,
             from_square,
             target_square,
+            en_passant_capture_square,
         )
         king_square = find_king_square(simulated_map, own_color)
 
@@ -847,7 +963,18 @@ def apply_gui_move(position, from_square, target_square):
     if target_square not in calculate_legal_moves(position, from_square):
         return False
 
-    captured_piece = get_piece_on_square(position, target_square)
+    en_passant_capture_square = get_en_passant_capture_square(
+        position,
+        piece,
+        from_square,
+        target_square,
+    )
+
+    if en_passant_capture_square is not None:
+        captured_piece = get_piece_on_square(position, en_passant_capture_square)
+    else:
+        captured_piece = get_piece_on_square(position, target_square)
+
     update_castle_rights_after_normal_move(
         position,
         piece,
@@ -861,7 +988,9 @@ def apply_gui_move(position, from_square, target_square):
         piece,
         from_square,
         target_square,
+        en_passant_capture_square,
     )
+    update_en_passant_state_after_move(position, piece, from_square, target_square)
     position.color_to_move = opposite_color(position.color_to_move)
     sync_engine_state(position)
 
